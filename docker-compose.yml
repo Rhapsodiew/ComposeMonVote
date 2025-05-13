@@ -1,0 +1,78 @@
+services:
+  poll:
+    build: ./poll
+    ports:
+      - "5000:80"
+    environment:
+      - REDIS_HOST=redis
+    networks:
+      - poll-network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      interval: 40s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - poll-network
+      - worker-network
+  worker:
+    build: ./worker
+    environment:
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432  
+      - POSTGRES_DB=mydb
+      - POSTGRES_USER=myuser
+      - POSTGRES_PASSWORD=mypassword
+    networks:
+      - worker-network
+    depends_on:
+      - redis
+      - db
+  db:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db-data:/db/data
+      - ./initdb:/docker-entrypoint-initdb.d
+
+    environment:
+      - POSTGRES_DB=mydb
+      - POSTGRES_USER=myuser
+      - POSTGRES_PASSWORD=mypassword
+    networks:
+      - result-network
+      - worker-network
+  result:
+    build: ./result
+    ports:
+      - "5001:80"
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_DB=mydb
+      - POSTGRES_USER=myuser
+      - POSTGRES_PORT=5432
+      - POSTGRES_PASSWORD=mypassword
+    networks:
+      - result-network
+    depends_on:
+      - db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001"]
+      interval: 40s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+
+networks:
+  poll-network:
+  result-network:
+  worker-network:
